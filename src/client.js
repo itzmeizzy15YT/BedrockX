@@ -86,28 +86,29 @@ class Client extends Connection {
 
         let payload = {
             GameVersion: this.options.version,
-            ServerAddress: `${this.options.host}:${this.options.port}`,
             PersonaSkin: true,
-            DeviceOS: 1,
-            DeviceId: v3(v4(), NIL).replace(/-/g, ''),
-            DeviceModel: 'iPhone11,8',
-            CurrentInputMode: 1,
-            DefaultInputMode: 1,
-            PlayFabId: v3(v4(), NIL).replace(/-/g, '').slice(0, 16).toLowerCase(),
+            DeviceOS: 2,
+            DeviceId: v3(v4(), NIL).replace(/-/g, '').toUpperCase(),
+            DeviceModel: 'iPhone14,3',
+            CurrentInputMode: 2,
+            DefaultInputMode: 2,
             SelfSignedId: v3(v4(), NIL),
+            GUIScale: 0,
             UIProfile: 1,
             LanguageCode: 'en_US',
             MaxViewDistance: 12,
-            MemoryTier: 3,
+            MemoryTier: 4,
             PlatformType: 1,
             GraphicsMode: 1,
+            TrustedSkin: true,
+            OverrideSkin: false,
             ...this.options.skinData
         }
 
         this.write('login', {
             protocol_version: this.options.protocolVersion,
             tokens: {
-                identity: JSON.stringify({ AuthenticationType: 0, Certificate: JSON.stringify({ chain: this.chain }), Token: this.token }),
+                identity: JSON.stringify({ AuthenticationType: 0, Certificate: JSON.stringify({ chain: [] }), Token: this.token }),
                 client: JWT.sign(payload, this.ecdhKeyPair.privateKey, { algorithm: 'ES384', header: { x5u: this.clientX509 } })
             }
         })

@@ -31,19 +31,9 @@ async function authenticate(client, options) {
     }
 
     const signedToken = result.result.signedToken
-
-    const chains = await options.authflow.getMinecraftBedrockToken(client.clientX509).catch(e => {
-      throw e
-    })
-
-    const jwt = chains[1]
-    const [h, payload] = jwt.split('.').map(k => Buffer.from(k, 'base64')) // eslint-disable-line
-    const xboxProfile = JSON.parse(String(payload))
-
-    client.profile = xboxProfile?.extraData
-    client.chain = chains
+   
     client.token = signedToken
-    client.emit('session', xboxProfile)
+    client.emit('session')
   } catch (err) {
     console.error(err)
     client.emit('error', err)
