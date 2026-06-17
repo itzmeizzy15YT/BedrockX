@@ -2,10 +2,10 @@ import EventEmitter from 'events'
 import { Authflow, ServerDeviceCodeResponse, Titles } from 'prismarine-auth'
 
 declare module 'bedrockx' {
-    type Version = '1.26.20'
+    type Version = '1.26.30'
 
     export interface Options {
-        // The version of Minecraft Bedrock Edition (Current is v1.26.20, and you must always stay up to date!)
+        // The version of Minecraft Bedrock Edition (Current is v1.26.30, and you must always stay up to date!)
         version: Version,
         // IP address of the server to connect to
         host: string,

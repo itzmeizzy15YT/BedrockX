@@ -7,8 +7,8 @@ class RealmAPI extends XboxAPI {
         this.headers = {
             "Accept": "*/*",
             "charset": "utf-8",
-            "client-ref": "1f6d1b10fc43f4c331af96d99ef1fe30ea642ed3",
-            "client-version": "1.26.20",
+            "client-ref": "040cca85d792e94e6fe087503108295846d4933d",
+            "client-version": "1.26.30",
             "x-clientplatform": "iOS",
             "x-networkprotocolversion": "1001",
             "content-type": "application/json",

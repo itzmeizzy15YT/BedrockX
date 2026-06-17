@@ -1,20 +1,23 @@
 const dgram = require('node:dgram')
+const crypto = require('node:crypto')
 const { EventEmitter } = require('node:events')
 const { Connection } = require('./connection')
 const { PACKET_TYPE, createDeserializer, createSerializer } = require('./serializer')
 const { SignalStructure, SignalType } = require('./signalling')
 const { createPacketData, getRandomUint64, prepareSecurePacket, processSecurePacket } = require('./util')
 const { RTCPeerConnection, RTCIceCandidate } = require('@roamhq/wrtc')
+const { CompactSign, importPKCS8 } = require("jose");
 
 const PORT = 7551
 const BROADCAST_ADDRESS = '255.255.255.255'
 
 class Client extends EventEmitter {
-  constructor(networkId, broadcastAddress = BROADCAST_ADDRESS) {
+  constructor(networkId, broadcastAddress = BROADCAST_ADDRESS, token) {
     super()
 
     this.serverNetworkId = networkId
     this.broadcastAddress = broadcastAddress
+    this.token = token
     this.networkId = getRandomUint64()
     this.connectionId = getRandomUint64()
     this.socket = dgram.createSocket('udp4')
@@ -82,8 +85,35 @@ class Client extends EventEmitter {
     }
   }
 
+  async createAssertion(fingerprint, token) {
+    const { privateKey: pkcs8Key } = crypto.generateKeyPairSync("ec", { namedCurve: "P-384", privateKeyEncoding: { type: "pkcs8", format: "pem" } });
+
+    const payload = JSON.stringify({ fingerprint: [{ algorithm: "sha-256", digest: fingerprint }] });
+
+    const ecPrivateKey = await importPKCS8(pkcs8Key, "ES384");
+    const encoder = new TextEncoder();
+
+    const jws = await new CompactSign(encoder.encode(payload)).setProtectedHeader({ alg: "ES384" }).sign(ecPrivateKey);
+
+    const parts = jws.split(".");
+    const fingerprints = `${parts[0]}..${parts[2]}`;
+
+    const data = {
+      assertion: JSON.stringify({
+        fingerprints,
+        token
+      }),
+      idp: {
+        domain: "https://authorization.franchise.minecraft-services.net/",
+        protocol: "default",
+      }
+    }
+
+    return Buffer.from(JSON.stringify(data)).toString('base64')
+  }
+
   async createOffer() {
-    this.rtcConnection = new RTCPeerConnection({ iceServers: this.credentials })
+    this.rtcConnection = new RTCPeerConnection({ iceServers: this.credentials, bundlePolicy: 'max-bundle' })
     this.connection = new Connection(this, this.connectionId, this.rtcConnection)
 
     const reliable = this.rtcConnection.createDataChannel('ReliableDataChannel', { ordered: true })
@@ -115,7 +145,18 @@ class Client extends EventEmitter {
 
     const offer = await this.rtcConnection.createOffer()
     const baseSdp = offer.sdp ?? ''
-    const sdp = baseSdp.replace(/^o=.*$/m, `o=- ${this.networkId} 2 IN IP4 127.0.0.1`)
+
+    const fingerprint = baseSdp.match(/^a=fingerprint:sha-256\s+(.*)$/m);
+    const fingerprintValue = fingerprint[1];
+
+    let sdp = baseSdp.replace(/^o=.*$/m, `o=- ${this.networkId} 2 IN IP4 127.0.0.1`);
+
+    if (fingerprintValue) {
+      const assertion = await this.createAssertion(fingerprintValue, this.token);
+
+      sdp = sdp.replace(/^(a=fingerprint:sha-256\s+.*)$/m, `$1\na=identity:${assertion}`);
+    }
+
     const localDescription = { type: offer.type, sdp }
 
     await this.rtcConnection.setLocalDescription(localDescription);

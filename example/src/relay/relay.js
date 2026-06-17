@@ -7,14 +7,14 @@ const { Relay } = require("../../../index");
 
 async function createRelay(realm) {
     const relay = new Relay({
-        host: "127.0.0.1",// localIp
+        host: localIp,
         // The port to start the relay at
-        port: 19134,
+        port: 12345,
         profilesFolder: "./auth",
         authTitle: Titles.MinecraftIOS,
         deviceType: "iOS",
         flow: "sisu",
-        version: "1.26.20",
+        version: "1.26.30",
         authflow: new Authflow(undefined, "./auth", {
             flow: "sisu",
             authTitle: Titles.MinecraftIOS,

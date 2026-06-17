@@ -31,7 +31,7 @@ class Client extends Connection {
         if (!options.delayedInit) this.init()
     }
 
-    init() {
+    async init() {
         this.serializer = createSerializer()
         this.deserializer = createDeserializer()
         this.features = { compressorInHeader: true }
@@ -40,13 +40,24 @@ class Client extends Connection {
         this.clientX509 = this.ecdhKeyPair.publicKey.export(der).toString('base64')
         this.privateKeyPEM = this.ecdhKeyPair.privateKey.export(pem)
 
+        await authenticate(this, this.options)
+
         switch (this.options.transport) {
             case "NETHERNET":
             case "NETHERNET_JSONRPC":
-                this.connection = new NethernetClient({ networkId: this.options.networkId })
+                this.connection = new NethernetClient({ networkId: this.options.networkId, token: this.token })
 
                 this.batchHeader = null
                 this.disableEncryption = true
+
+                this.nethernet.signalling = this.options.transport === "NETHERNET_JSONRPC" ? new NethernetJSONRPC(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId) : new NethernetSignal(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId)
+
+                await this.nethernet.signalling.connect()
+
+                this.connection.nethernet.credentials = this.nethernet.signalling.credentials
+                this.connection.nethernet.signalHandler = this.nethernet.signalling.write.bind(this.nethernet.signalling)
+
+                this.nethernet.signalling.on('signal', signal => this.connection.nethernet.handleSignal(signal))
                 break;
             case "DEFAULT":
                 this.connection = new RakClient({ host: this.options.host, port: this.options.port })
@@ -62,25 +73,9 @@ class Client extends Connection {
     }
 
     connect() {
-        if (!this.connection) throw new Error('Connect not currently allowed')
-            
-        this.on('session', async () => {
-            if (this.options.transport.includes("NETHERNET")) {
-                this.nethernet.signalling = this.options.transport === "NETHERNET_JSONRPC" ? new NethernetJSONRPC(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId) : new NethernetSignal(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId)
-
-                this.nethernet.signalling.connect()
-
-                this.connection.nethernet.signalHandler = this.nethernet.signalling.write.bind(this.nethernet.signalling)
-
-                this.nethernet.signalling.on('signal', signal => this.connection.nethernet.handleSignal(signal))
-                this.nethernet.signalling.on('credentials', (credentials) => {
-                    this.nethernet.credentials = this.nethernet.signalling.credentials
-                    this._connect()
-                })
-            }
+        this.on("connect_allowed", () => {
+            this._connect()
         })
-
-        authenticate(this, this.options)
     }
 
     onEncapsulated = (encapsulated) => {
