@@ -57,6 +57,7 @@ async function createInstance(realm, RAPI) {
     });
 
     instance.on("error", (error) => {
+        console.log(error)
         if (wasKicked) return;
 
         instance.emit("kick", { message: String(error) });

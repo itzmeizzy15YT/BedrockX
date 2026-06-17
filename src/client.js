@@ -73,9 +73,8 @@ class Client extends Connection {
     }
 
     connect() {
-        this.on("connect_allowed", () => {
-            this._connect()
-        })
+        if (!this.connection) throw new Error('Connect not currently allowed')
+        this._connect()
     }
 
     onEncapsulated = (encapsulated) => {
