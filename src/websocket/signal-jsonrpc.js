@@ -91,7 +91,7 @@ class NethernetJSONRPC extends EventEmitter {
         const address = `https://signal.franchise.minecraft-services.net/ws/v1.0/messaging/connect`;
 
         try {
-            const ws = new WebSocket(address, { headers: { Authorization: xbl.mcToken, "session-id": this.networkId, "request-id": v4() } })
+            const ws = new WebSocket(address, { headers: { Authorization: xbl.mcToken, "session-id": v4(), "request-id": v4() } })
             this.ws = ws
             this.lastLiveness = Date.now()
 
