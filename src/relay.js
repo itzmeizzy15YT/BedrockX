@@ -25,7 +25,7 @@ class RelayPlayer extends Player {
         this.player_unique_id = -1;
     }
 
-    forwardToUpstream(data) {
+    forwardToUpstream(data, packet, modified) {
         switch (data.name) {
             case 'client_cache_status':
                 this.upstream.write('client_cache_status', { enabled: this.enableChunkCaching })
@@ -35,7 +35,7 @@ class RelayPlayer extends Player {
                 break;
         }
 
-        this.upstream.write(data.name, data.params)
+        modified || !packet ? this.upstream.write(data.name, data.params) : this.upstream.sendBuffer(packet)
     }
 
     // Called when we get a packet from backend server (Backend -> PROXY -> Client)
@@ -68,11 +68,16 @@ class RelayPlayer extends Player {
                     this.sentStartGame = true
                     break
                 case 'level_chunk':
-                    this.chunkSendCache.push(params)
+                    this.chunkSendCache.push(packet)
                     return
-                case 'creative_content':
-                    this.sendBuffer(packet)
-                    return
+                case 'item_registry':
+                    params.itemstates?.forEach(state => {
+                        if (state.name === 'minecraft:shield') {
+                            this.server.serializer.proto.setVariable('ShieldItemID', state.runtime_id)
+                            this.server.deserializer.proto.setVariable('ShieldItemID', state.runtime_id)
+                        }
+                    })
+                    break;
                 case 'update_player_game_type':
                     if (this.player_unique_id) {
                         if (params.player_unique_id != this.player_unique_id) break;
@@ -84,12 +89,12 @@ class RelayPlayer extends Player {
                     break
             }
 
-            this.write(name, params)
+            des.modified ? this.write(name, params) : this.sendBuffer(packet)
         }
 
         const chunkLen = this.chunkSendCache.length
         if (chunkLen > 0 && this.sentStartGame) {
-            for (let i = 0; i < chunkLen; i++) this.write("level_chunk", this.chunkSendCache[i]);
+            for (let i = 0; i < chunkLen; i++) this.sendBuffer(this.chunkSendCache[i]);
 
             this.chunkSendCache = [];
         }
@@ -118,11 +123,11 @@ class RelayPlayer extends Player {
             if (des.canceled) return
 
             if (!this.upstream) {
-                this.pendingUpstreamPackets.push(des.data)
+                this.pendingUpstreamPackets.push({ data: des.data, packet, modified: des.modified })
                 return
             }
 
-            this.forwardToUpstream(des.data)
+            this.forwardToUpstream(des.data, packet, des.modified)
         } else {
             super.readPacket(packet)
         }
@@ -175,7 +180,7 @@ class Relay extends Server {
 
         const client = new Client(options)
 
-        await client.init()
+        await client.init();
         client.connect()
 
         client.once('resource_packs_info', (params) => {
@@ -191,7 +196,10 @@ class Relay extends Server {
 
             const len = ds.pendingUpstreamPackets.length
             if (len > 0) {
-                for (let i = 0; i < len; i++) ds.forwardToUpstream(ds.pendingUpstreamPackets[i]);
+                for (let i = 0; i < len; i++) {
+                    const pending = ds.pendingUpstreamPackets[i]
+                    ds.forwardToUpstream(pending.data, pending.packet, pending.modified)
+                }
 
                 ds.pendingUpstreamPackets = [];
             }
