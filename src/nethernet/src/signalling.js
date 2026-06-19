@@ -3,26 +3,25 @@ const SignalType = {
   ConnectResponse: 'CONNECTRESPONSE',
   CandidateAdd: 'CANDIDATEADD',
   ConnectError: 'CONNECTERROR'
-}
+};
 
 class SignalStructure {
-  constructor (type, connectionId, data, networkId, serverNetworkId) {
-    this.type = type
-    this.connectionId = connectionId
-    this.data = data
-    this.networkId = networkId
-    this.serverNetworkId = serverNetworkId
+  constructor(type, connectionId, data, networkId, serverNetworkId) {
+    this.type = type;
+    this.connectionId = connectionId;
+    this.data = data;
+    this.networkId = networkId;
+    this.serverNetworkId = serverNetworkId;
   }
 
-  toString () {
-    return `${this.type} ${this.connectionId} ${this.data}`
+  toString() {
+    return `${this.type} ${this.connectionId} ${this.data}`;
   }
 
-  static fromString (message) {
-    const [type, connectionId, ...data] = message.split(' ')
-
-    return new this(type, connectionId, data.join(' '))
+  static fromString(message) {
+    const [type, connectionId, ...data] = message.split(' ');
+    return new this(type, connectionId, data.join(' '));
   }
 }
 
-module.exports = { SignalStructure, SignalType }
+module.exports = { SignalStructure, SignalType };
