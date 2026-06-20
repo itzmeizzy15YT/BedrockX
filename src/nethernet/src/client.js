@@ -1,3 +1,4 @@
+//removed jose assertion layer which caused SDP fingerprint mismatch
 const dgram = require('node:dgram');
 const { EventEmitter } = require('node:events');
 const { Connection } = require('./connection');
@@ -21,7 +22,6 @@ class NethernetClient extends EventEmitter {
     this.socket.on('message', (buffer, rinfo) => this.processPacket(buffer, rinfo));
     this.socket.bind(() => this.socket.setBroadcast(true));
 
-    // These come from BedrockX
     const { createDeserializer, createSerializer } = require('bedrockx/src/nethernet/src/serializer');
     this.serializer = createSerializer();
     this.deserializer = createDeserializer();
