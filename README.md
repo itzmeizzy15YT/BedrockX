@@ -9,3 +9,5 @@ Parts of NETHERNET Support is based off of Atomic Protocol (Original Repository 
 forked from thejfkvis 
 
 This modified version of BedrockX has the jose assertion layer removed from the Nethernet client. I downgraded the SDP handling to use raw offers without certificate signing. Also cleaned up some connection logic to make Nethernet connections more stable.
+
+discord.gg/luckys to report issues bugs and more
