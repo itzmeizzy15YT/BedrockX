@@ -9,7 +9,7 @@ const { RTCPeerConnection, RTCIceCandidate } = require('@roamhq/wrtc');
 const PORT = 7551;
 const BROADCAST_ADDRESS = '255.255.255.255';
 
-class NethernetClient extends EventEmitter {
+class Client extends EventEmitter {
   constructor({ networkId, broadcastAddress = BROADCAST_ADDRESS, credentials = [] }) {
     super();
 
@@ -30,6 +30,9 @@ class NethernetClient extends EventEmitter {
     this.addresses = new Map();
     this.signalHandler = this.sendDiscoveryMessage;
     this.running = false;
+    this.onConnected = () => {};
+    this.onCloseConnection = () => {};
+    this.onEncapsulated = () => {};
 
     this.sendDiscoveryRequest();
     this.pingInterval = setInterval(() => this.sendDiscoveryRequest(), 2000);
@@ -54,7 +57,6 @@ class NethernetClient extends EventEmitter {
 
     if (parts[8] === 'raddr') parsedData.relatedAddress = parts[9];
     if (parts[10] === 'rport') parsedData.relatedPort = parseInt(parts[11]);
-
     const ufragIndex = parts.indexOf('ufrag');
     if (ufragIndex !== -1) parsedData.usernameFragment = parts[ufragIndex + 1];
 
@@ -63,13 +65,9 @@ class NethernetClient extends EventEmitter {
 
   handleAnswer(signal) {
     if (!this.rtcConnection) return;
-
     switch (this.rtcConnection.connectionState) {
-      case 'stable':
-      case 'closed':
-        return;
+      case 'stable': case 'closed': return;
     }
-
     try {
       this.rtcConnection.setRemoteDescription({ type: 'answer', sdp: signal.data });
     } catch (e) {
@@ -91,25 +89,17 @@ class NethernetClient extends EventEmitter {
       if (event.candidate.candidate.includes('tcp') || 
           event.candidate.candidate.includes('::1') || 
           event.candidate.candidate.includes('127.0.0.1')) return;
-
-      this.signalHandler(new SignalStructure(
-        SignalType.CandidateAdd, this.connectionId, 
-        event.candidate.candidate, this.networkId, this.serverNetworkId
-      ));
+      this.signalHandler(new SignalStructure(SignalType.CandidateAdd, this.connectionId, 
+        event.candidate.candidate, this.networkId, this.serverNetworkId));
     };
 
     this.rtcConnection.onconnectionstatechange = () => {
       switch (this.rtcConnection?.connectionState) {
-        case 'new':
-        case 'connected':
-          this.emit('connected', this.connection);
-          break;
-        case 'closed':
-        case 'disconnected':
-        case 'failed':
+        case 'new': case 'connected':
+          this.emit('connected', this.connection); break;
+        case 'closed': case 'disconnected': case 'failed':
           this.emit('disconnect', this.connectionId, 'disconnected');
-          this.close();
-          break;
+          this.close(); break;
       }
     };
 
@@ -117,29 +107,19 @@ class NethernetClient extends EventEmitter {
     const baseSdp = offer.sdp ?? '';
     const sdp = baseSdp.replace(/^o=.*$/m, `o=- ${this.networkId} 2 IN IP4 127.0.0.1`);
     const localDescription = { type: offer.type, sdp };
-
     await this.rtcConnection.setLocalDescription(localDescription);
 
-    this.signalHandler(new SignalStructure(
-      SignalType.ConnectRequest, this.connectionId, 
-      sdp, this.networkId, this.serverNetworkId
-    ));
+    this.signalHandler(new SignalStructure(SignalType.ConnectRequest, this.connectionId, 
+      sdp, this.networkId, this.serverNetworkId));
   }
 
   processPacket(buffer, rinfo) {
     const parsedPacket = processSecurePacket(buffer, this.deserializer);
-
     switch (parsedPacket.name) {
-      case 'discovery_request':
-        break;
-      case 'discovery_response':
-        this.handleResponse(parsedPacket, rinfo);
-        break;
-      case 'discovery_message':
-        this.handleMessage(parsedPacket);
-        break;
-      default:
-        throw new Error('Unknown packet type');
+      case 'discovery_request': break;
+      case 'discovery_response': this.handleResponse(parsedPacket, rinfo); break;
+      case 'discovery_message': this.handleMessage(parsedPacket); break;
+      default: throw new Error('Unknown packet type');
     }
   }
 
@@ -153,7 +133,6 @@ class NethernetClient extends EventEmitter {
   handleMessage(packet) {
     const data = packet.params.data;
     if (data === 'Ping') return;
-
     const signal = SignalStructure.fromString(data);
     signal.networkId = BigInt(packet.params.sender_id);
     this.handleSignal(signal);
@@ -161,13 +140,10 @@ class NethernetClient extends EventEmitter {
 
   handleSignal(signal) {
     switch (signal.type) {
-      case SignalType.ConnectResponse:
-        this.handleAnswer(signal);
-        break;
+      case SignalType.ConnectResponse: this.handleAnswer(signal); break;
       case SignalType.CandidateAdd:
         if (signal.networkId === this.serverNetworkId) signal.networkId = this.networkId;
-        this.handleCandidate(signal);
-        break;
+        this.handleCandidate(signal); break;
     }
   }
 
@@ -180,16 +156,10 @@ class NethernetClient extends EventEmitter {
   sendDiscoveryMessage(signal) {
     const targetId = signal.serverNetworkId || signal.networkId;
     const rinfo = this.addresses.get(BigInt(targetId));
-    if (!rinfo) {
-      console.error('No address found for target', targetId);
-      return;
-    }
-
+    if (!rinfo) { console.error('No address found for target', targetId); return; }
     const packetData = createPacketData('discovery_message', this.networkId, {
-      recipient_id: BigInt(targetId),
-      data: signal.toString()
+      recipient_id: BigInt(targetId), data: signal.toString()
     });
-
     const packetToSend = prepareSecurePacket(this.serializer, packetData);
     this.socket.send(packetToSend, rinfo.port, rinfo.address);
   }
@@ -200,6 +170,11 @@ class NethernetClient extends EventEmitter {
   }
 
   send(buffer) {
+    this.connection.send(buffer);
+  }
+  // removed jose assertion layer which caused SDP fingerprint mismatch
+  // BedrockX compatibility calls send() for Nethernet
+  sendReliable(buffer) {
     this.connection.send(buffer);
   }
 
@@ -219,4 +194,4 @@ class NethernetClient extends EventEmitter {
   }
 }
 
-module.exports = { NethernetClient };
+module.exports = { Client };
